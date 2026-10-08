@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard – Clima em Matelândia</title>
+  <!-- Chart.js: biblioteca que desenha gráficos dentro de um <canvas> -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    :root {
+      --fundo: #0c1a1f;
+      --card: #13272e;
+      --texto: #e6f1ee;
+      --suave: #8fa9a8;
+      --quente: #fb923c;
+      --frio: #38bdf8;
+      --chuva: #2dd4bf;
+    }
+
+    body {
+      font-family: Georgia, serif;
+      background: var(--fundo);
+      color: var(--texto);
+      margin: 0;
+      padding: 24px;
+      max-width: 1100px;
+      margin-inline: auto;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      margin: 0 0 4px;
+    }
+
+    small,
+    label {
+      color: var(--suave);
+      font-family: sans-serif;
+    }
+
+    .aviso {
+      display: inline-block;
+      margin: 8px 0 16px;
+      padding: 4px 10px;
+      border: 1px solid var(--quente);
+      border-radius: 6px;
+      color: var(--quente);
+      font-family: sans-serif;
+      font-size: .85rem;
+    }
+
+    select {
+      background: var(--card);
+      color: var(--texto);
+      border: 1px solid var(--suave);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 1rem;
+    }
+
+    /* auto-fit encaixa quantos cartões couberem na largura da tela */
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .graficos {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 10px;
+      padding: 16px;
+      font-family: sans-serif;
+    }
+
+    .card span {
+      display: block;
+      font-size: 2rem;
+      font-weight: bold;
+      margin-top: 6px;
+      font-family: Georgia, serif;
+    }
+
+    select:focus-visible {
+      outline: 2px solid var(--chuva);
+    }
+  </style>
+</head>
+
+<body>
+  <h1>🌦 Clima em Matelândia – ano típico</h1>
+  <small>Pergunta: em quais meses faz mais calor e chove mais? (ajuda a planejar plantio e atividades)</small><br>
+  <!-- Aviso obrigatório: os dados são inventados -->
+  <div class="aviso">Dados fictícios para fins didáticos</div><br>
+  <label for="periodo">Período: </label>
+  <select id="periodo">
+    <option value="0">Ano todo</option>
+    <option value="1">1º semestre (jan–jun)</option>
+    <option value="2">2º semestre (jul–dez)</option>
+  </select>
+
+  <!-- CAMADA 2: KPIs (respondem "como estamos?") -->
+  <div class="kpis">
+    <div class="card">Temp. máxima média <span id="kpiTemp">–</span></div>
+    <div class="card">Chuva total <span id="kpiChuva">–</span></div>
+    <div class="card">Mês mais chuvoso <span id="kpiMesChuva">–</span></div>
+    <div class="card">Mês mais quente <span id="kpiMesQuente">–</span></div>
+  </div>
+
+  <!-- CAMADA 3: gráficos (respondem "quando?") -->
+  <div class="graficos">
+    <div class="card"><canvas id="graficoTemp"></canvas></div>
+    <div class="card"><canvas id="graficoChuva"></canvas></div>
+  </div>
+
+  <script>
+    // ===== CAMADA 1) DADOS =====
+    // Cada objeto é uma LINHA da planilha. Valores inventados.
+    const clima = [
+      { mes: "Jan", tmax: 32, tmin: 20, chuva: 190 },
+      { mes: "Fev", tmax: 31, tmin: 20, chuva: 160 },
+      { mes: "Mar", tmax: 30, tmin: 19, chuva: 130 },
+      { mes: "Abr", tmax: 27, tmin: 16, chuva: 150 },
+      { mes: "Mai", tmax: 23, tmin: 12, chuva: 170 },
+      { mes: "Jun", tmax: 21, tmin: 10, chuva: 150 },
+      { mes: "Jul", tmax: 21, tmin: 9, chuva: 110 },
+      { mes: "Ago", tmax: 24, tmin: 11, chuva: 90 },
+      { mes: "Set", tmax: 25, tmin: 13, chuva: 150 },
+      { mes: "Out", tmax: 27, tmin: 16, chuva: 200 },
+      { mes: "Nov", tmax: 29, tmin: 18, chuva: 170 },
+      { mes: "Dez", tmax: 31, tmin: 19, chuva: 190 },
+    ];
+
+    // ===== GRÁFICOS: criados uma vez, vazios; a função atualizar() preenche =====
+    Chart.defaults.color = "#e6f1ee";
+
+    // Linha: ideal para EVOLUÇÃO no tempo (meses)
+    const gTemp = new Chart(document.getElementById("graficoTemp"), {
+      type: "line",
+      data: {
+        labels: [], datasets: [
+          { label: "Máxima (°C)", data: [], borderColor: "#fb923c", tension: 0.3 },
+          { label: "Mínima (°C)", data: [], borderColor: "#38bdf8", tension: 0.3 }
+        ]
+      },
+      options: { plugins: { title: { display: true, text: "Como a temperatura muda ao longo do ano?" } } }
+    });
+
+    // Barras: ideal para COMPARAR meses entre si
+    const gChuva = new Chart(document.getElementById("graficoChuva"), {
+      type: "bar",
+      data: { labels: [], datasets: [{ label: "Chuva (mm)", data: [], backgroundColor: "#2dd4bf" }] },
+      options: { plugins: { title: { display: true, text: "Quais meses chovem mais?" } } }
+    });
+
+    // ===== PROCESSAMENTO + EXIBIÇÃO (roda ao abrir e ao trocar o filtro) =====
+    function atualizar() {
+      // Filtro: escolhe quais linhas entram no cálculo
+      const f = document.getElementById("periodo").value;
+      const dados = f === "1" ? clima.slice(0, 6) : f === "2" ? clima.slice(6) : clima;
+
+      // reduce acumula um valor percorrendo a lista (o 0 é o valor inicial)
+      const somaTemp = dados.reduce((s, d) => s + d.tmax, 0);
+      const mediaTemp = somaTemp / dados.length;
+      const chuvaTotal = dados.reduce((s, d) => s + d.chuva, 0);
+      // compara dois a dois e fica com o maior
+      const maisChuvoso = dados.reduce((a, b) => (a.chuva >= b.chuva ? a : b));
+      const maisQuente = dados.reduce((a, b) => (a.tmax >= b.tmax ? a : b));
+
+      // KPIs
+      document.getElementById("kpiTemp").textContent = mediaTemp.toFixed(2).replace(".", ",") + " °C";
+      document.getElementById("kpiChuva").textContent = chuvaTotal.toLocaleString("pt-BR") + " mm";
+      document.getElementById("kpiMesChuva").textContent = maisChuvoso.mes + " (" + maisChuvoso.chuva + " mm)";
+      document.getElementById("kpiMesQuente").textContent = maisQuente.mes + " (" + maisQuente.tmax + " °C)";
+
+      // Gráficos
+      const meses = dados.map(d => d.mes);
+      gTemp.data.labels = meses;
+      gTemp.data.datasets[0].data = dados.map(d => d.tmax);
+      gTemp.data.datasets[1].data = dados.map(d => d.tmin);
+      gTemp.update();
+      gChuva.data.labels = meses;
+      gChuva.data.datasets[0].data = dados.map(d => d.chuva);
+      gChuva.update();
+    }
+    document.getElementById("periodo").addEventListener("change", atualizar);
+    atualizar();
+  </script>
+</body>
+
+</html>
